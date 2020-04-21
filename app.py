@@ -364,6 +364,7 @@ def isSentimentLinked(keyphrase):
     elif(isMatchWithKnownEntity(keyphrase)):
       res = True
     return res
+
 def processReview(f_path, review, reviewIdx):
     saveReviewTxt(f_path, review)
     review = review_preprocess(review);
@@ -378,6 +379,8 @@ def processReview(f_path, review, reviewIdx):
       ctx_keywords_res = extract_contextual_keywords(ibmTxtAnalyzerResult['keywords'], senti_label, reviewIdx)
       saveObject(f_path,ctx_keywords_res)
       return ctx_keywords_res;
+    else:
+        return []
 
 def doProcessReviews(df,fname):
     folder_name = os.path.join("reviews", fname)
