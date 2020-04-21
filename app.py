@@ -1,8 +1,10 @@
 from flask import Flask
+from flask_cors import CORS
 from flask import request
 from flask import jsonify
 
 app = Flask(__name__)
+cors = CORS(app)
 from gensim.models import KeyedVectors
 import urllib
 from urllib.request import urlopen
