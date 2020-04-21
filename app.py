@@ -36,13 +36,13 @@ import math
 server_url = "https://localhost"
 
 # load the Stanford GloVe model
-# summary_ratio = 0.15
-# num_of_search_keywords = 5
-# top_n = 5
-# word2vec_output_file = "models/glove.6B.100d.txt.word2vec"
-# filename = word2vec_output_file
-# model = KeyedVectors.load_word2vec_format(filename, binary=False)
-# vocab_words =  list(model.vocab.keys())
+summary_ratio = 0.15
+num_of_search_keywords = 5
+top_n = 5
+word2vec_output_file = "models/glove.6B.100d.txt.word2vec"
+filename = word2vec_output_file
+model = KeyedVectors.load_word2vec_format(filename, binary=False)
+vocab_words =  list(model.vocab.keys())
 
 contractions = {
     "ain't": "am not / are not",
