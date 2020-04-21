@@ -22,6 +22,7 @@ import re
 import nltk
 nltk.download('stopwords')
 nltk.download('averaged_perceptron_tagger')
+nltk.download('punkt')
 from nltk.corpus import stopwords
 from textblob import TextBlob
 from nltk.stem.wordnet import WordNetLemmatizer
@@ -35,13 +36,13 @@ import math
 server_url = "https://localhost"
 
 # load the Stanford GloVe model
-summary_ratio = 0.15
-num_of_search_keywords = 5
-top_n = 5
-word2vec_output_file = "models/glove.6B.100d.txt.word2vec"
-filename = word2vec_output_file
-model = KeyedVectors.load_word2vec_format(filename, binary=False)
-vocab_words =  list(model.vocab.keys())
+# summary_ratio = 0.15
+# num_of_search_keywords = 5
+# top_n = 5
+# word2vec_output_file = "models/glove.6B.100d.txt.word2vec"
+# filename = word2vec_output_file
+# model = KeyedVectors.load_word2vec_format(filename, binary=False)
+# vocab_words =  list(model.vocab.keys())
 
 contractions = {
     "ain't": "am not / are not",
@@ -650,6 +651,23 @@ def reviewSummary():
         f_result = postProcessReviewsResult(result);
         j_result = convertDFToJson(f_result)
     return j_result
+
+@app.route('/reviews', methods=['POST'])
+def getReviews():
+    body = request.json
+    print(body)
+    if("url" in body):
+        url = body.get('url')
+        params = url.split("/");
+        fname = params[len(params) - 1].replace(".csv", "")
+        df = load_df('reviews/' + fname)
+        new_columns = df.columns.values
+        new_columns[0] = 'idx'
+        df.columns = new_columns
+        df = df.set_index('idx')
+        ids = body.get('ids')
+        f_result = df[df.index.isin(ids)]['Reviews'].tolist()
+    return jsonify(f_result)
 
 
 
