@@ -394,23 +394,48 @@ def processReview(f_path, review, reviewIdx):
     if 'keywords' in ibmTxtAnalyzerResult.keys():
       saveTxtAnalzeResult(f_path, ibmTxtAnalyzerResult)
       senti_label = ibmTxtAnalyzerResult['sentiment']['document']['label']
+      res = {
+        "sentiment": ibmTxtAnalyzerResult['sentiment']['document']['label']
+      }
       ctx_keywords_res = extract_contextual_keywords(ibmTxtAnalyzerResult['keywords'], senti_label, reviewIdx)
       saveObject(f_path,ctx_keywords_res)
-      return ctx_keywords_res;
+      res['ctx_keywords'] = ctx_keywords_res;
+      return res;
     else:
-        return []
+        return {}
 
 def doProcessReviews(df,fname):
     folder_name = os.path.join("reviews", fname)
     create_folder(folder_name);
     result = []
+    pos_reviews = 0;
+    neg_reviews = 0;
+    neutral_reviews = 0;
+    other_reviews = 0
     for idx, review in df['Reviews'].items():
         print("-----idx---" + str(idx))
         f_path = folder_name + "/" + str(idx);
         create_folder(f_path) 
-        ctx_keywords_res = processReview(f_path, review, idx);
-        result = result + ctx_keywords_res
-    return result
+        res = processReview(f_path, review, idx);
+        if("sentiment" in res.keys()):
+            if(res['sentiment'] == 'positive'):
+                pos_reviews = pos_reviews + 1
+            elif(res['sentiment'] == 'negative'):
+                neg_reviews = neg_reviews + 1
+            elif(res['sentiment'] == 'neutral'):
+                neutral_reviews = neutral_reviews + 1
+            else:
+                other_reviews = other_reviews + 1
+            ctx_keywords_res = res['ctx_keywords']
+            result = result + ctx_keywords_res
+    f_obj = {
+        "pos_reviews": pos_reviews,
+        "neg_reviews": neg_reviews,
+        "neutral_reviews": neutral_reviews,
+        "other_reviews": other_reviews,
+        "result": result
+    }
+    return f_obj
 
 
 def doProcess(title, text):
@@ -596,10 +621,13 @@ def mergeReviewResults(reviews):
     # given more entries
     merged = []
     similarPhrases = loadSimilarPhraseCache()
+    cur_similarPhrases = {}
     for review in reviews:
         cur_phrase = review['keyPhrase'];
         if(not cur_phrase in similarPhrases.keys()):
             similarPhrases[cur_phrase] = []
+        if(not cur_phrase in cur_similarPhrases.keys()):
+            cur_similarPhrases[cur_phrase] = []
         if(len(merged) == 0):
             merged.append(review)
         else:
@@ -608,22 +636,30 @@ def mergeReviewResults(reviews):
                 if(m_review['sentiment'] == review['sentiment']):
                     cur_text = review['keyPhrase'];
                     m_text = m_review['keyPhrase'];
-                    if(m_text in similarPhrases[cur_phrase]):
-                        m_review['reviewIds'] = m_review['reviewIds'] + review['reviewIds']
+                    if(m_text in cur_similarPhrases[cur_phrase]):
+                        if(not review['reviewIds'][0] in m_review['reviewIds']):
+                            m_review['reviewIds'] = m_review['reviewIds'] + review['reviewIds']
                         isMerged = True
                     else:
                         dist = cosine_distance_wordembedding_method(cur_text, m_text);
                         if(dist > 60):
-                            m_review['reviewIds'] = m_review['reviewIds'] + review['reviewIds']
+                            if(not review['reviewIds'][0] in m_review['reviewIds']):
+                                m_review['reviewIds'] = m_review['reviewIds'] + review['reviewIds']
                             if(not m_text in similarPhrases[cur_phrase]):
                                 similarPhrases[cur_phrase].append(m_text)
+                            if(not m_text in cur_similarPhrases[cur_phrase]):
+                                cur_similarPhrases[cur_phrase].append(m_text)
                             isMerged = True
                             break;
             if(not isMerged):
                 merged.append(review)
     saveSimilarPhraseCache(similarPhrases)
     # output merged entries
-    return merged
+    f_res = {
+        "similarPhrases": cur_similarPhrases,
+        "merged": merged
+    }
+    return f_res
 
 def postProcessReviewsResult(result):
     df = pd.DataFrame(result)
@@ -639,8 +675,8 @@ def postProcessReviewsResult(result):
     print("Total Len: " + str(total_ctx))
     print("Pos prop: " + str(pos_prop))
     print("Neg prop: " + str(neg_prop))
-    num_pos_ctx = round(pos_prop * total_ctx * (10/100));
-    num_neg_ctx = round(neg_prop * total_ctx * (10/100));
+    num_pos_ctx = round(pos_prop  * (10));
+    num_neg_ctx = round(neg_prop  * (10));
     if(num_pos_ctx + num_neg_ctx >= 10):
         if(len(negative_df_ctx) != 0):
             return pd.concat([postive_df_ctx.head(num_pos_ctx), negative_df_ctx.head(num_neg_ctx)]).head(10)
@@ -648,8 +684,8 @@ def postProcessReviewsResult(result):
             return pd.concat([postive_df_ctx.head(num_pos_ctx), negative_df_nctx.head(num_neg_ctx)]).head(10)
     else:
         reminging = 10 - num_pos_ctx + num_neg_ctx;
-        num_pos_nctx = math.floor(pos_prop * total_nctx * (reminging/100));
-        num_neg_nctx = math.floor(neg_prop * total_nctx * (reminging/100));
+        num_pos_nctx = math.floor(pos_prop  * (reminging));
+        num_neg_nctx = math.floor(neg_prop  * (reminging));
         return pd.concat([postive_df_ctx.head(num_pos_ctx), negative_df_ctx.head(num_neg_ctx) , postive_df_nctx.head(num_pos_nctx), negative_df_nctx.head(num_neg_nctx)]).head(10);
 
 @app.route('/ping')
@@ -702,13 +738,25 @@ def reviewSummary():
         new_columns[0] = 'idx'
         df.columns = new_columns
         df = df.set_index('idx')
+        total_reviews = len(df);
         print(len(df));
-        result = doProcessReviews(df,fname)
+        f_obj = doProcessReviews(df,fname)
+        result = f_obj['result']
         print(len(result))
-        result = mergeReviewResults(result);
+        ob_result = mergeReviewResults(result);
+        result = ob_result['merged']
         f_result = postProcessReviewsResult(result);
         j_result = convertDFToJson(f_result)
-    return j_result
+        t_result = {
+            "totalReviews": total_reviews,
+            "positvieReviwes": f_obj['pos_reviews'],
+            "negativeReviews": f_obj['neg_reviews'],
+            "neutralReviwes": f_obj['neutral_reviews'],
+            "otherReviews": f_obj['other_reviews'],
+            "similarPhrases": ob_result['similarPhrases'],
+            "reviewSummary": j_result
+        }
+    return (t_result)
 
 @app.route('/reviews', methods=['POST'])
 def getReviews():
