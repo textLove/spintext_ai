@@ -280,6 +280,24 @@ def loadIbmTxtAnalysis(f_path):
       contents = json.loads(j.read())
   return contents
 
+def loadSimilarPhraseCache():
+  print("loading from cache..")
+  json_file_path = os.getcwd() + "/similarPhrases.json"
+  try:
+    with open(json_file_path, 'r') as j:
+        contents = json.loads(j.read())
+  except:
+      contents = {}
+      saveSimilarPhraseCache({})
+  return contents
+
+def saveSimilarPhraseCache(obj):
+  #save the google search results
+    text_file_path = os.getcwd() + "/similarPhrases.json"
+    with open(text_file_path, 'w', encoding='utf-8') as f:
+        json.dump(obj, f, ensure_ascii=False, indent=4)
+
+
 def loadGImageSearchResults(f_path):
   print("loading from cache..")
   json_file_path = f_path + "/gsearchResults.json"
@@ -572,6 +590,41 @@ def convertDFToJson(df1):
     k = json.dumps(d)
     return k
 
+
+
+def mergeReviewResults(reviews):
+    # given more entries
+    merged = []
+    similarPhrases = loadSimilarPhraseCache()
+    for review in reviews:
+        cur_phrase = review['keyPhrase'];
+        if(not cur_phrase in similarPhrases.keys()):
+            similarPhrases[cur_phrase] = []
+        if(len(merged) == 0):
+            merged.append(review)
+        else:
+            isMerged = False
+            for m_review in merged:
+                if(m_review['sentiment'] == review['sentiment']):
+                    cur_text = review['keyPhrase'];
+                    m_text = m_review['keyPhrase'];
+                    if(m_text in similarPhrases[cur_phrase]):
+                        m_review['reviewIds'] = m_review['reviewIds'] + review['reviewIds']
+                        isMerged = True
+                    else:
+                        dist = cosine_distance_wordembedding_method(cur_text, m_text);
+                        if(dist > 60):
+                            m_review['reviewIds'] = m_review['reviewIds'] + review['reviewIds']
+                            if(not m_text in similarPhrases[cur_phrase]):
+                                similarPhrases[cur_phrase].append(m_text)
+                            isMerged = True
+                            break;
+            if(not isMerged):
+                merged.append(review)
+    saveSimilarPhraseCache(similarPhrases)
+    # output merged entries
+    return merged
+
 def postProcessReviewsResult(result):
     df = pd.DataFrame(result)
     postive_df_ctx = df[(df['sentiment'] == "positive") & (df['ctx'] == True)].sort_values('relevanceScore', ascending=False)
@@ -651,6 +704,8 @@ def reviewSummary():
         df = df.set_index('idx')
         print(len(df));
         result = doProcessReviews(df,fname)
+        print(len(result))
+        result = mergeReviewResults(result);
         f_result = postProcessReviewsResult(result);
         j_result = convertDFToJson(f_result)
     return j_result
@@ -672,7 +727,10 @@ def getReviews():
         f_result = df[df.index.isin(ids)]['Reviews'].tolist()
     return jsonify(f_result)
 
-
+@app.route('/reviews/similarphrases')
+def getSimilarPhrases ():
+    similarPhrases = loadSimilarPhraseCache()
+    return jsonify(similarPhrases)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=443,ssl_context='adhoc')
