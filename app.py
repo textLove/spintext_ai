@@ -636,8 +636,15 @@ def mergeReviewResults(reviews):
                 if(m_review['sentiment'] == review['sentiment']):
                     cur_text = review['keyPhrase'];
                     m_text = m_review['keyPhrase'];
-                    if(m_text in cur_similarPhrases[cur_phrase]):
+                    if(m_text in similarPhrases[cur_phrase]):
                         if(not review['reviewIds'][0] in m_review['reviewIds']):
+                            if(not m_text in cur_similarPhrases[cur_phrase]):
+                                cur_similarPhrases[cur_phrase].append(m_text)
+                            if(not m_text in cur_similarPhrases.keys()):
+                                    cur_similarPhrases[m_text] = []
+                                    cur_similarPhrases[m_text].append(cur_phrase)
+                            else:
+                                cur_similarPhrases[m_text].append(cur_phrase)
                             m_review['reviewIds'] = m_review['reviewIds'] + review['reviewIds']
                         isMerged = True
                     else:
@@ -649,6 +656,11 @@ def mergeReviewResults(reviews):
                                 similarPhrases[cur_phrase].append(m_text)
                             if(not m_text in cur_similarPhrases[cur_phrase]):
                                 cur_similarPhrases[cur_phrase].append(m_text)
+                                if(not m_text in cur_similarPhrases.keys()):
+                                     cur_similarPhrases[m_text] = []
+                                     cur_similarPhrases[m_text].append(cur_phrase)
+                                else:
+                                    cur_similarPhrases[m_text].append(cur_phrase)
                             isMerged = True
                             break;
             if(not isMerged):
